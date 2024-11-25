@@ -1,0 +1,128 @@
+#include <Servo.h> // Librería de servos
+#include "Adafruit_TCS34725.h" // Librería del sensor de color
+
+#define TRIG_PIN 9 
+#define ECHO_PIN 10
+#define UMBRAL_DISTANCIA 15
+
+// Pines de los sensores infrarrojos
+#define SENSOR_IR_IZQUIERDO A0
+#define SENSOR_IR_DERECHO A1
+#define SENSOR_IR_CENTRO_IZQ A2
+#define SENSOR_IR_CENTRO_DER A3
+
+// Pines del motor (controlador del motor tipo L298N)
+#define MOTOR_IZQ_A 5
+#define MOTOR_IZQ_B 6
+#define MOTOR_DER_A 7
+#define MOTOR_DER_B 8
+#define VELOCIDAD_BASE 150
+
+Servo servoUltraSonic;
+
+Adafruit_TCS34725 sensorRGB = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
+  // Configuración de pines de sensores infrarrojos
+  pinMode(SENSOR_IR_IZQUIERDO, INPUT);
+  pinMode(SENSOR_IR_DERECHO, INPUT);
+  pinMode(SENSOR_IR_CENTRO_IZQ, INPUT);
+  pinMode(SENSOR_IR_CENTRO_DER, INPUT);
+  
+  // Configuración de pines de motores
+  pinMode(MOTOR_IZQ_A, OUTPUT);
+  pinMode(MOTOR_IZQ_B, OUTPUT);
+  pinMode(MOTOR_DER_A, OUTPUT);
+  pinMode(MOTOR_DER_B, OUTPUT);
+
+  servoUltraSonic.attach(2);
+
+  if (!sensorRGB.begin()) {
+    Serial.println("No se encontró el sensor de color");
+    while (1);
+  }
+}
+
+void loop() {
+  long distancia = medirDistancia();
+  if (distancia <= UMBRAL_DISTANCIA) {
+    // Si detecta una pared cerca
+    retroceder(3); // Retroceder 3 cm
+    girar(180); // Girar 180 grados
+  } else {
+    seguirCamino(); // Seguir avanzando o evitando obstáculos
+  }
+}
+
+long medirDistancia() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  long distance = (duration / 2) / 29.1;
+  return distance;
+}
+
+void retroceder(int cm) {
+  int tiempo = (cm * 1000) / VELOCIDAD_BASE; // Ajustar para tu robot
+  moverMotores(-VELOCIDAD_BASE, -VELOCIDAD_BASE);
+  delay(tiempo);
+  detenerMotores();
+}
+
+void girar(int grados) {
+  int tiempo = (grados * 10); // Ajustar para tu robot (tiempo de giro)
+  moverMotores(-VELOCIDAD_BASE, VELOCIDAD_BASE);
+  delay(tiempo);
+  detenerMotores();
+}
+
+void seguirCamino() {
+  int irIzq = digitalRead(SENSOR_IR_IZQUIERDO);
+  int irDer = digitalRead(SENSOR_IR_DERECHO);
+  int irCentroIzq = digitalRead(SENSOR_IR_CENTRO_IZQ);
+  int irCentroDer = digitalRead(SENSOR_IR_CENTRO_DER);
+
+  // Lógica básica para seguir líneas
+  if (irCentroIzq == LOW && irCentroDer == LOW) {
+    moverMotores(VELOCIDAD_BASE, VELOCIDAD_BASE); // Avanzar
+  } else if (irIzq == LOW) {
+    moverMotores(0, VELOCIDAD_BASE); // Girar ligeramente derecha
+  } else if (irDer == LOW) {
+    moverMotores(VELOCIDAD_BASE, 0); // Girar ligeramente izquierda
+  } else {
+    detenerMotores(); // Detenerse si no detecta línea
+  }
+}
+
+void moverMotores(int velocidadIzq, int velocidadDer) {
+  if (velocidadIzq > 0) {
+    analogWrite(MOTOR_IZQ_A, velocidadIzq);
+    analogWrite(MOTOR_IZQ_B, 0);
+  } else {
+    analogWrite(MOTOR_IZQ_A, 0);
+    analogWrite(MOTOR_IZQ_B, -velocidadIzq);
+  }
+
+  if (velocidadDer > 0) {
+    analogWrite(MOTOR_DER_A, velocidadDer);
+    analogWrite(MOTOR_DER_B, 0);
+  } else {
+    analogWrite(MOTOR_DER_A, 0);
+    analogWrite(MOTOR_DER_B, -velocidadDer);
+  }
+}
+
+void detenerMotores() {
+  analogWrite(MOTOR_IZQ_A, 0);
+  analogWrite(MOTOR_IZQ_B, 0);
+  analogWrite(MOTOR_DER_A, 0);
+  analogWrite(MOTOR_DER_B, 0);
+}
